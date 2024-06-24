@@ -12,7 +12,6 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO)
 import dotenv
 dotenv.load_dotenv('.env')
-
 oai_client = OpenAI()
 elevenlabs_client = ElevenLabs()
 

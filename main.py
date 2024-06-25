@@ -9,17 +9,25 @@ from models import Message
 import speech_recognition as sr
 import logging
 from pathlib import Path
+from pydub import AudioSegment
+from pydub.playback import play
+
 logging.basicConfig(level=logging.INFO)
-import dotenv
-dotenv.load_dotenv('.env')
-oai_client = OpenAI()
+
+# Ensure these directories exist
+os.makedirs("recordings", exist_ok=True)
+os.makedirs("transcripts", exist_ok=True)
+os.makedirs("outputs", exist_ok=True)
+os.makedirs("logs", exist_ok=True)
+
+oai_client = OpenAI(api_key="sk-proj-3RIpioeZApwy904VOIENT3BlbkFJ9GsVfPHZp2HR7DUPy6Zw")
 elevenlabs_client = ElevenLabs()
 
 CHAT_MODEL = "gpt-4o"
 TTS_MODEL = "tts-1"
 MODEL_TEMPERATURE = 0.5
 AUDIO_MODEL = "whisper-1"
-VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
+VOICE_ID = "Xb7hH8MSUJpSbSDYk0k2"
 
 def ask_gpt_chat(prompt: str, messages: list[Message]):
     """Returns ChatGPT's response to the given prompt."""
@@ -35,15 +43,25 @@ def ask_gpt_chat(prompt: str, messages: list[Message]):
 
 def setup_prompt(prompt_file: str = 'prompts/vet_prompt.md') -> str:
     """Creates a prompt for gpt for generating a response."""
-    with open(prompt_file) as f:
-        prompt = f.read()
+    prompt = '''You've been tasked to call an airline's customer support line and reschedule your flight. You have been provided with the following information:
 
+* Your name is Test User
+* Your phone number is 555-555-5555
+* Your email is hello@example.com
+* Your address is 123 Fake St, New York, NY 10001
+* Your original flight was United Airlines flight 1234
+* Your original flight was scheduled to depart at 12pm on Monday, January 1st.
+* You'd like to reschedule your flight to depart on January 3rd.
+
+If you don't know how to respond, you can say "Sorry, I'm not sure."
+
+Begin'''
     return prompt
 
 def get_transcription(file_path: str):
-    audio_file= open(file_path, "rb")
+    audio_file = open(file_path, "rb")
     transcription = oai_client.audio.transcriptions.create(
-        model=AUDIO_MODEL, 
+        model=AUDIO_MODEL,
         file=audio_file
     )
     return transcription.text
@@ -62,33 +80,14 @@ def record():
 
     # write audio to a WAV file
     timestamp = datetime.datetime.now().timestamp()
-    with open(f"./recordings/{timestamp}.wav", "wb") as f:
+    recording_path = Path(f"./recordings/{timestamp}.wav")
+    with recording_path.open("wb") as f:
         f.write(audio.get_wav_data())
-    transcript = get_transcription(f"./recordings/{timestamp}.wav")
-    with open(f"./transcripts/{timestamp}.txt", "w") as f:
+    transcript = get_transcription(str(recording_path))
+    transcript_path = Path(f"./transcripts/{timestamp}.txt")
+    with transcript_path.open("w") as f:
         f.write(transcript)
     return transcript
-
-def oai_text_to_speech(text: str):
-    timestamp = datetime.datetime.now().timestamp()
-    speech_file_path = Path(__file__).parent / f"outputs/{timestamp}.mp3"
-    response = oai_client.audio.speech.create(
-        model=TTS_MODEL,
-        voice="nova",
-        input=text
-    )
-    response.write_to_file(speech_file_path)
-    return speech_file_path
-
-def elevenlabs_text_to_speech(text: str):
-    audio_stream = elevenlabs_client.generate(
-        text=text,
-        voice=Voice(
-            voice_id=VOICE_ID
-        ),
-        stream=True
-    )
-    stream(audio_stream)
 
 def clean_up():
     logging.info('Exiting...')
@@ -104,6 +103,32 @@ def clean_up():
     with open(f'logs/conversation_{timestamp}.txt', 'w') as f:
         for message in conversation_messages:
             f.write(f"{message.role}: {message.content}\n")
+
+def oai_text_to_speech(text: str):
+    timestamp = datetime.datetime.now().timestamp()
+    speech_file_path = Path(f"./outputs/{timestamp}.mp3")
+    response = oai_client.audio.speech.create(
+        model=TTS_MODEL,
+        voice="nova",
+        input=text
+    )
+    with speech_file_path.open("wb") as f:
+        f.write(response.content)
+    return str(speech_file_path)
+
+def play_audio(file_path):
+    audio = AudioSegment.from_file(file_path)
+    play(audio)
+
+def elevenlabs_text_to_speech(text: str):
+    audio_stream = elevenlabs_client.generate(
+        text=text,
+        voice=Voice(
+            voice_id=VOICE_ID
+        ),
+        stream=True
+    )
+    stream(audio_stream)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -128,7 +153,7 @@ if __name__ == "__main__":
             else:
                 audio_file = oai_text_to_speech(answer)
                 # Play the audio file
-                os.system(f"afplay {audio_file}")
+                play_audio(audio_file)
             conversation_messages.append(Message(role="assistant", content=answer))
             if 'bye' in user_input.lower():
                 clean_up()

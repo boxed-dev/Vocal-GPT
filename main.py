@@ -20,14 +20,14 @@ os.makedirs("transcripts", exist_ok=True)
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("logs", exist_ok=True)
 
-oai_client = OpenAI(api_key="sk-proj-3RIpioeZApwy904VOIENT3BlbkFJ9GsVfPHZp2HR7DUPy6Zw")
-elevenlabs_client = ElevenLabs()
+oai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
 CHAT_MODEL = "gpt-4o"
 TTS_MODEL = "tts-1"
 MODEL_TEMPERATURE = 0.5
 AUDIO_MODEL = "whisper-1"
-VOICE_ID = "Xb7hH8MSUJpSbSDYk0k2"
+VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 
 def ask_gpt_chat(prompt: str, messages: list[Message]):
     """Returns ChatGPT's response to the given prompt."""
